@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "VegasScores": {
+      "commandName": "Project",
+      "nativeDebugging": false
+    }
+  }
+}
