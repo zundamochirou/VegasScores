@@ -1,4 +1,5 @@
-﻿using Microsoft.VisualBasic.FileIO;
+﻿using log4net;
+using Microsoft.VisualBasic.FileIO;
 using ScriptPortal.Vegas;
 using System;
 using System.Collections.Generic;
@@ -18,24 +19,92 @@ namespace ScoreSample
     /// </summary>
     public class EntryPoint
     {
+        private const string SCORE_PATH = @"D:\Media\VegasPro\20220227\score.csv";
+
+        private const string OUT_0 = @"I:\素材\BS004\アウト表示\0アウト.png";
+        private const string OUT_1 = @"I:\素材\BS004\アウト表示\1アウト.png";
+        private const string OUT_2 = @"I:\素材\BS004\アウト表示\2アウト.png";
+
+        private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+
         private Vegas vegas = null;
 
         public void FromVegas(Vegas vegas)
         {
             this.vegas = vegas;
 
-            CreateInning("4表");
+            ScoreFile sFile = new ScoreFile(SCORE_PATH);
+            sFile.Load();
 
+            foreach (var se in sFile.EventList)
+            {
+                Debug.WriteLine(se.Time);
+                CreateNewTrackEvents(se);
+            }
+
+            //CreateOut(1);
+
+            //CreateInning("4表");
         }
 
-
-
-        private void CreateOut(int count)
+        /// <summary>
+        /// スコアの記載によって新しいトラックイベント群を作成する
+        /// </summary>
+        /// <param name="se"></param>
+        private void CreateNewTrackEvents(ScoreEvent se)
         {
-            var t = FindTrack("OUT");
-
-
+            CreateOut(se);
         }
+
+        /// <summary>
+        /// Track名 "OUT"
+        /// </summary>
+        /// <param name="se"></param>
+        private void CreateOut(ScoreEvent se)
+        {
+            var take = SelectOutImageTake(se.OutCount);
+            if ( take == null)
+            {
+                log.InfoFormat("3アウトのため非表示とします({0:H:mm:ss}})", se.Time);
+                return;     
+            }
+
+            var t = FindTrack("OUT");
+            VideoEvent ve = new VideoEvent(vegas.Project, se.StartTime, se.Length, string.Format("{0}アウト", se.OutCount));
+            t.Events.Add(ve);
+            ve.Takes.Add(take);
+        }
+
+        /// <summary>
+        /// アウトカウントのTakeを取得します。
+        /// </summary>
+        /// <param name="outCount"></param>
+        /// <returns>Takeオブジェクト。3カウントの場合はNull</returns>
+        private Take SelectOutImageTake(int outCount)
+        {
+            string mediaPath = string.Empty;
+
+            if (outCount == 0)
+            {
+                mediaPath = OUT_0;
+            }
+            else if (outCount == 1)
+            {
+                mediaPath = OUT_1;
+            }
+            else if (outCount == 2)
+            {
+                mediaPath = OUT_2;
+            }
+            else
+            {
+                return null;
+            }
+
+            var m = Media.CreateInstance(vegas.Project, mediaPath);
+            return new Take(m.GetVideoStreamByIndex(0));
+        }
+
 
         private void CreateInning(string text)
         {
@@ -177,10 +246,7 @@ namespace ScoreSample
                     // 直前のイベントに対して時間を設定する
                     if (beforeEvent != null)
                     {
-                        var currentTime = DateTime.ParseExact(se.Time, "HH:mm:ss", DateTimeFormatInfo.InvariantInfo);
-                        var beforeTime = DateTime.ParseExact(beforeEvent.Time, "HH:mm:ss", DateTimeFormatInfo.InvariantInfo);
-
-                        var ts = currentTime - beforeTime;
+                        var ts = se.Time - beforeEvent.Time;
                         beforeEvent.LengthSeconds = ts.TotalSeconds;
                     }
                     beforeEvent = se;
@@ -200,7 +266,7 @@ namespace ScoreSample
         /// <summary>
         /// イベント時間 (00:00:00 表記)
         /// </summary>
-        public string Time;
+        public DateTime Time;
 
         /// <summary>
         /// 先攻
@@ -259,7 +325,15 @@ namespace ScoreSample
         {
             get
             {
-                return Timecode.FromString(string.Format("{0};00", this.Time));
+                return Timecode.FromString(string.Format("{0:HH:mm:ss};00", this.Time));
+            }
+        }
+
+        public Timecode Length
+        {
+            get
+            {
+                return Timecode.FromSeconds(LengthSeconds);
             }
         }
 
@@ -267,12 +341,12 @@ namespace ScoreSample
         {
             var s = new ScoreEvent
             {
-                Time = cols[0],
+                Time = DateTime.ParseExact(cols[0], "H:mm:ss", DateTimeFormatInfo.InvariantInfo),
                 TeamA = cols[1],
                 TeamB = cols[2],
                 Inning = cols[3],
                 Score = cols[4],
-                OutCount = int.Parse(cols[5]),
+                OutCount = !string.IsNullOrEmpty(cols[5]) ? int.Parse(cols[5]) : 0,
                 RunnerFirst = (cols[6] == "1"),
                 RunnerSecond = (cols[7] == "1"),
                 RunnerThird = (cols[8] == "1"),
