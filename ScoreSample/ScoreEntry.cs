@@ -24,6 +24,9 @@ namespace ScoreSample
         private const string OUT_0 = @"I:\素材\BS004\アウト表示\0アウト.png";
         private const string OUT_1 = @"I:\素材\BS004\アウト表示\1アウト.png";
         private const string OUT_2 = @"I:\素材\BS004\アウト表示\2アウト.png";
+        private const string RUNNER_1 = @"I:\素材\BS004\ランナー表示\ランナー1塁.png";
+        private const string RUNNER_2 = @"I:\素材\BS004\ランナー表示\ランナー2塁.png";
+        private const string RUNNER_3 = @"I:\素材\BS004\ランナー表示\ランナー3塁.png";
 
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
@@ -41,10 +44,6 @@ namespace ScoreSample
                 Debug.WriteLine(se.Time);
                 CreateNewTrackEvents(se);
             }
-
-            //CreateOut(1);
-
-            //CreateInning("4表");
         }
 
         /// <summary>
@@ -53,7 +52,78 @@ namespace ScoreSample
         /// <param name="se"></param>
         private void CreateNewTrackEvents(ScoreEvent se)
         {
+            CreateTextTrack(se, "TEAM1", se.TeamA);
+            CreateTextTrack(se, "TEAM2", se.TeamB);
+            CreateTextTrack(se, "INNING", se.Inning);
+            CreateTextTrack(se, "SCORE", se.Score);
+            
+            if (!string.IsNullOrWhiteSpace(se.Note))
+            {
+                CreateTextTrack(se, "MEMO", se.Note);
+            }
+
             CreateOut(se);
+            // アウトカウント 3以上はランナー表記なし
+            if (se.OutCount < 3)
+            {
+                CreateRunner(se);
+            }
+        }
+
+        private void CreateTextTrack(ScoreEvent se, string trackName, string text)
+        {
+            var track = FindTrack(trackName);
+            var template = FindTemplate(track);
+            var gen = GetGenerator();
+
+            Media media = Media.CreateInstance(vegas.Project, gen);
+            UpdateTextInfo(template.ActiveTake.Media, media, text);
+            UpdateLocation(template.ActiveTake.Media, media);
+            UpdateTextColor(template.ActiveTake.Media, media);
+            media.Generator.OFXEffect.AllParametersChanged();
+
+            // MEMO だけ 表示を 5秒にする
+            var length = (trackName == "MEMO") ? Timecode.FromSeconds(5) : se.Length;
+            VideoEvent ve = new VideoEvent(vegas.Project, se.StartTime, length, trackName);
+            track.Events.Add(ve);
+            ve.Takes.Add(new Take(media.GetVideoStreamByIndex(0)));
+
+            // MEMO だけ 前後にフェード設定
+            if (trackName == "MEMO")
+            {
+                ve.FadeIn.Length = Timecode.FromMilliseconds(500);
+                ve.FadeOut.Length = Timecode.FromMilliseconds(500);
+            }
+        }
+
+        /// <summary>
+        /// ランナー
+        /// </summary>
+        /// <param name="se"></param>
+        private void CreateRunner(ScoreEvent se)
+        {
+            if (se.RunnerFirst)
+            {
+                CreateRunnderTrack(se, "RUNNER1", RUNNER_1);
+            }
+            if (se.RunnerSecond)
+            {
+                CreateRunnderTrack(se, "RUNNER2", RUNNER_2);
+            }
+            if (se.RunnerThird)
+            {
+                CreateRunnderTrack(se, "RUNNER3", RUNNER_3);
+            }
+        }
+
+        private void CreateRunnderTrack(ScoreEvent se, string trackName, string mediaPath)
+        {
+            var t = FindTrack(trackName);
+            VideoEvent ve = new VideoEvent(vegas.Project, se.StartTime, se.Length, trackName);
+            t.Events.Add(ve);
+
+            var m = Media.CreateInstance(vegas.Project, mediaPath);
+            ve.Takes.Add(new Take(m.GetVideoStreamByIndex(0)));
         }
 
         /// <summary>
@@ -63,10 +133,10 @@ namespace ScoreSample
         private void CreateOut(ScoreEvent se)
         {
             var take = SelectOutImageTake(se.OutCount);
-            if ( take == null)
+            if (take == null)
             {
                 log.InfoFormat("3アウトのため非表示とします({0:H:mm:ss}})", se.Time);
-                return;     
+                return;
             }
 
             var t = FindTrack("OUT");
@@ -179,6 +249,13 @@ namespace ScoreSample
             dstParam.Value = location;
         }
 
+        public void UpdateTextColor(Media src, Media dst)
+        {
+            var srcParam = src.Generator.OFXEffect.FindParameterByName("TextColor") as OFXRGBAParameter;
+            var dstParam = dst.Generator.OFXEffect.FindParameterByName("TextColor") as OFXRGBAParameter;
+
+            dstParam.Value = srcParam.Value;
+        }
 
         private Track FindTrack(string name)
         {
@@ -358,10 +435,5 @@ namespace ScoreSample
 
     }
 
-    public class ScoreEntry
-    {
-
-
-    }
 }
 
