@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -27,7 +28,7 @@ namespace ScoreSample
 
         }
 
-        
+
 
         private void CreateOut(int count)
         {
@@ -40,7 +41,7 @@ namespace ScoreSample
         {
             var t = FindTrack("INNING");
             var te = FindTemplate(t);
-                                              
+
             var gen = GetGenerator();
             Media media = Media.CreateInstance(vegas.Project, gen);
             var ofx = media.Generator.OFXEffect;
@@ -96,9 +97,9 @@ namespace ScoreSample
 
             dstParam.Value = b.Rtf;
         }
-        
+
         public void UpdateLocation(Media src, Media dst)
-        {          
+        {
             var srcParam = src.Generator.OFXEffect.FindParameterByName("Location") as OFXDouble2DParameter;
             var dstParam = dst.Generator.OFXEffect.FindParameterByName("Location") as OFXDouble2DParameter;
 
@@ -119,7 +120,7 @@ namespace ScoreSample
         {
             return t.Events.First(te => te.ActiveTake.Name == "Template");
         }
-        
+
         private PlugInNode GetGenerator()
         {
             return vegas.Generators.GetChildByUniqueID("{Svfx:com.vegascreativesoftware:titlesandtext}");
@@ -136,22 +137,66 @@ namespace ScoreSample
             this.FilePath = filePath;
         }
 
+        private List<ScoreEvent> events = new List<ScoreEvent>();
+
+        public IReadOnlyList<ScoreEvent> EventList
+        {
+            get { return events.AsReadOnly(); }
+        }
+
         public void Load()
         {
+            bool firstRow = true;
+
             using (TextFieldParser p = new TextFieldParser(FilePath, Encoding.UTF8))
             {
+                p.TextFieldType = FieldType.Delimited;
+                p.SetDelimiters(",");
+                p.TrimWhiteSpace = true;
 
+                ScoreEvent beforeEvent = null;
 
+                while (!p.EndOfData)
+                {
+                    string[] cols = p.ReadFields();
+                    if (firstRow)
+                    {
+                        firstRow = false;
+                        continue;
+                    }
+
+                    if (cols.Length < 10)
+                    {
+                        Debug.WriteLine("カラム数が規定未満のためスキップします 行[{0}],カラム数[{1}]", p.LineNumber, cols.Length);
+                        continue;
+                    }
+
+                    var se = ScoreEvent.Create(cols);
+                    events.Add(se);
+
+                    // 直前のイベントに対して時間を設定する
+                    if (beforeEvent != null)
+                    {
+                        var currentTime = DateTime.ParseExact(se.Time, "HH:mm:ss", DateTimeFormatInfo.InvariantInfo);
+                        var beforeTime = DateTime.ParseExact(beforeEvent.Time, "HH:mm:ss", DateTimeFormatInfo.InvariantInfo);
+
+                        var ts = currentTime - beforeTime;
+                        beforeEvent.LengthSeconds = ts.TotalSeconds;
+                    }
+                    beforeEvent = se;
+                }
             }
-
         }
-        
 
     }
 
-    
+
     public class ScoreEvent
     {
+        private ScoreEvent()
+        {
+        }
+
         /// <summary>
         /// イベント時間 (00:00:00 表記)
         /// </summary>
@@ -180,7 +225,7 @@ namespace ScoreSample
         /// <summary>
         /// アウト
         /// </summary>
-        public string OutCount;
+        public int OutCount;
 
         /// <summary>
         /// 1塁走者
@@ -206,7 +251,7 @@ namespace ScoreSample
         /// イベントの長さ(秒)
         /// </summary>
         public double LengthSeconds { get; set; } = 10;
-        
+
         /// <summary>
         /// イベント開始時間
         /// </summary>
@@ -216,6 +261,25 @@ namespace ScoreSample
             {
                 return Timecode.FromString(string.Format("{0};00", this.Time));
             }
+        }
+
+        public static ScoreEvent Create(string[] cols)
+        {
+            var s = new ScoreEvent
+            {
+                Time = cols[0],
+                TeamA = cols[1],
+                TeamB = cols[2],
+                Inning = cols[3],
+                Score = cols[4],
+                OutCount = int.Parse(cols[5]),
+                RunnerFirst = (cols[6] == "1"),
+                RunnerSecond = (cols[7] == "1"),
+                RunnerThird = (cols[8] == "1"),
+                Note = cols[9]
+            };
+
+            return s;
         }
 
     }
