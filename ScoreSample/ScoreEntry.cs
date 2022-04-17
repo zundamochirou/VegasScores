@@ -19,7 +19,7 @@ namespace ScoreSample
     /// </summary>
     public class EntryPoint
     {
-        private const string SCORE_PATH = @"D:\Media\VegasPro\20220227\score.csv";
+        private const string SCORE_PATH = @"D:\Media\VegasPro\20220403\ScoreTable - 20220402_並木フェニックス.csv";
 
         private const string OUT_0 = @"I:\素材\BS004\アウト表示\0アウト.png";
         private const string OUT_1 = @"I:\素材\BS004\アウト表示\1アウト.png";
@@ -56,7 +56,7 @@ namespace ScoreSample
             CreateTextTrack(se, "TEAM2", se.TeamB);
             CreateTextTrack(se, "INNING", se.Inning);
             CreateTextTrack(se, "SCORE", se.Score);
-            
+
             if (!string.IsNullOrWhiteSpace(se.Note))
             {
                 CreateTextTrack(se, "MEMO", se.Note);
@@ -82,8 +82,8 @@ namespace ScoreSample
             UpdateTextColor(template.ActiveTake.Media, media);
             media.Generator.OFXEffect.AllParametersChanged();
 
-            // MEMO だけ 表示を 5秒にする
-            var length = (trackName == "MEMO") ? Timecode.FromSeconds(5) : se.Length;
+            // MEMO は 表示時間をを 最大5秒にする
+            var length = (trackName == "MEMO" && (se.LengthSeconds > 5)) ? Timecode.FromSeconds(5) : se.Length;
             VideoEvent ve = new VideoEvent(vegas.Project, se.StartTime, length, trackName);
             track.Events.Add(ve);
             ve.Takes.Add(new Take(media.GetVideoStreamByIndex(0)));
@@ -173,52 +173,6 @@ namespace ScoreSample
 
             var m = Media.CreateInstance(vegas.Project, mediaPath);
             return new Take(m.GetVideoStreamByIndex(0));
-        }
-
-
-        private void CreateInning(string text)
-        {
-            var t = FindTrack("INNING");
-            var te = FindTemplate(t);
-
-            var gen = GetGenerator();
-            Media media = Media.CreateInstance(vegas.Project, gen);
-            var ofx = media.Generator.OFXEffect;
-
-            UpdateTextInfo(te.ActiveTake.Media, media, text);
-            UpdateLocation(te.ActiveTake.Media, media);
-
-            //var nx = ofx.FindParameterByName("Text") as OFXStringParameter;
-            //RichTextBox b = new RichTextBox();
-            //b.Rtf = nx.Value;
-            //b.Text = text;
-            //nx.Value = b.Rtf;
-            ofx.AllParametersChanged();
-
-            Timecode startTimeCode = Timecode.FromString("00:00:20;00");
-            VideoEvent ve = new VideoEvent(vegas.Project, startTimeCode, Timecode.FromString("00:00:10;00"), Guid.NewGuid().ToString());
-            t.Events.Add(ve);
-            Take tk = new Take(media.GetVideoStreamByIndex(0));
-            ve.Takes.Add(tk);
-
-            //dst.Name = Guid.NewGuid().ToString();
-            //dst.ActiveTake.Name = Guid.NewGuid().ToString();
-            //dst.Length = Timecode.FromString("00:00:10;00");
-
-            //var dst = te.Copy(t, startTimeCode);
-
-            //OFXStringParameter x = dst.ActiveTake.Media.Generator.OFXEffect.FindParameterByName("Text") as OFXStringParameter;
-
-            //RichTextBox b = new RichTextBox();
-            //b.Rtf = x.Value;
-            //b.Text = text;
-
-            //var nx = ofx.FindParameterByName("Text") as OFXStringParameter;
-            //nx.Value = b.Rtf;
-            //ofx.AllParametersChanged();
-
-            //dst.AddTake(media.GetVideoStreamByIndex(0));
-
         }
 
         public void UpdateTextInfo(Media src, Media dst, string text)
